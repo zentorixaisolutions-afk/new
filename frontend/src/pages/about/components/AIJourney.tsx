@@ -114,10 +114,16 @@ export default function AIJourney() {
       drawFrame(thinkImgs.current[0]);
     };
     if (first.complete && first.naturalWidth > 0) markReady();
-    else first.onload = markReady;
+    else {
+      first.onload = markReady;
+      first.onerror = markReady;
+    }
+    // safety: never hang the loader
+    const fallback = setTimeout(markReady, 3000);
 
     return () => {
       cancelled = true;
+      clearTimeout(fallback);
     };
   }, [drawFrame, sizeCanvas]);
 
