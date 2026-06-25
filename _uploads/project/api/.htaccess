@@ -1,0 +1,29 @@
+# SINS Technology API - Apache Configuration
+# Place this in your api/ directory
+
+# Enable rewrite
+RewriteEngine On
+
+# Set environment variables for database (REPLACE WITH YOUR ACTUAL PASSWORD)
+# Option A: Set directly in .htaccess (ensure .htaccess is not world-readable)
+SetEnv DB_HOST "localhost"
+SetEnv DB_PORT "3306"
+SetEnv DB_NAME "technic9_it_services"
+SetEnv DB_USER "technic9_ruwan"
+SetEnv DB_PASSWORD "YOUR_DATABASE_PASSWORD_HERE"
+
+# Option B (preferred): Comment out the SetEnv lines above and use cPanel's
+# "Set Environment Variables" feature, or set them in your server config.
+
+# Block direct access to config and sensitive files
+<FilesMatch "^(config\.php|\.env)$">
+    Require all denied
+</FilesMatch>
+
+# Block access to the uploads directory listing
+Options -Indexes
+
+# Increase upload limits for images
+php_value upload_max_filesize 20M
+php_value post_max_size 25M
+php_value max_execution_time 120
