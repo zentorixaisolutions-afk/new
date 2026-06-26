@@ -35,6 +35,15 @@ Goal: make it a polished "3D animated website".
 - Site shows a one-time **IntroLoader** (external readdy video; 10s fallback). To test, set `sessionStorage['conquer-intro-shown']='true'` then reload.
 - Some external readdy-site.link media (hero/about videos) may not load in preview (ERR_ABORTED) — pre-existing, not in scope.
 
+## Update (2026-06-26) — Revised AIJourney per user feedback
+- Replaced the 3-beat (thinking/tablet/clock) version with a SINGLE scroll-reveal section (still pinned, right after AboutHero).
+- Robot image background removed via `rembg` -> transparent `public/about-anim/robot.png` (cut from uploaded image 1). Old frame folders + clock removed.
+- Section background is now TRANSPARENT so the site's own Layout background shows through (per user request).
+- On scroll: robot cutout animates (entrance + parallax drift + scale + idle float + glow halo) while text builds progressively & smoothly: heading "CONQUER COMPUTERS" -> tagline "Real Technology. Real Results." -> 3 company paragraphs (exact copy from user's storyboard images).
+- testids: ai-journey-section, ai-journey-pin, ai-journey-robot, ai-journey-heading, ai-journey-tagline, ai-journey-para-0/1/2.
+- Verified pin holds (pinTop=0) and progressive reveal works (desktop + mobile data).
+- NOTE: text overlaps in content with the existing `CompanyIntroduction` section below — left intact per instructions; can be removed on request.
+
 ## Backlog / Next
 - P1: Soften top edge of robot frames slightly more / optional parallax on robot.
 - P2: Add subtle ambient particle layer behind clock; localize AIJourney copy via i18n.
