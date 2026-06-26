@@ -1,0 +1,2 @@
+import{t as e}from"./rolldown-runtime-CNC7AqOf.js";var t=e(((e,t)=>{var n=function(){if(typeof self<`u`)return self;if(typeof window<`u`)return window;if(typeof global<`u`)return global;throw Error(`unable to locate global object`)}();t.exports=e=n.fetch,n.fetch&&(e.default=n.fetch.bind(n)),e.Headers=n.Headers,e.Request=n.Request,e.Response=n.Response}));export default t();
+//# sourceMappingURL=browser-TDQEaEH1.js.map
