@@ -5,7 +5,9 @@ import { useReducedMotion } from '@/hooks/useScrollPosition';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const ROBOT = '/about-anim/robot.png';
+// feather mask so the video dissolves into the page (no hard edges / no box)
+const EDGE_MASK =
+  'radial-gradient(125% 125% at 68% 45%, #000 38%, rgba(0,0,0,0.65) 62%, transparent 82%)';
 
 const PARAGRAPHS = [
   'Conquer Computers LLC is a trusted IT solutions company based in Deira, Dubai, serving businesses across the UAE since 1997. With over 27 years of experience, we deliver reliable technology services including IT support, managed services, CCTV systems, networking, cloud solutions, cybersecurity, business automation, and digital solutions.',
@@ -13,7 +15,6 @@ const PARAGRAPHS = [
   'Our team combines hands-on technical expertise with a strong commitment to customer satisfaction. Whether you need structured cabling for a new office, a complete network setup, cloud migration, CCTV installation, or ongoing IT support, we deliver professional solutions on time and within budget.',
 ];
 
-// smooth 0..1 within a scroll window
 function win(p: number, a: number, b: number) {
   return Math.max(0, Math.min(1, (p - a) / (b - a)));
 }
@@ -21,13 +22,31 @@ function win(p: number, a: number, b: number) {
 export default function AIJourney() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
-  const robotRef = useRef<HTMLDivElement>(null);
+  const videoWrapRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const headingRef = useRef<HTMLDivElement>(null);
   const taglineRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLSpanElement>(null);
   const paraRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const hintRef = useRef<HTMLDivElement>(null);
   const prefersReduced = useReducedMotion();
+
+  // keep the ambient video playing only while the section is on screen
+  useEffect(() => {
+    const v = videoRef.current;
+    const pin = pinRef.current;
+    if (!v || !pin) return;
+    v.play().catch(() => {});
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) v.play().catch(() => {});
+        else v.pause();
+      },
+      { threshold: 0.01 }
+    );
+    io.observe(pin);
+    return () => io.disconnect();
+  }, []);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -39,36 +58,30 @@ export default function AIJourney() {
     };
 
     const render = (p: number) => {
-      // robot: enter + gentle parallax / scale through the whole section
-      const ep = win(p, 0, 0.12);
-      if (robotRef.current) {
-        gsap.set(robotRef.current, {
-          opacity: 0.25 + ep * 0.75,
-          x: (1 - ep) * 70,
-          y: -p * 46,
-          scale: 0.92 + ep * 0.08 + p * 0.05,
+      // video: subtle scroll-driven parallax + scale so it feels alive while scrolling
+      if (videoWrapRef.current) {
+        gsap.set(videoWrapRef.current, {
+          scale: 1.06 + p * 0.06,
+          yPercent: -p * 6,
+          xPercent: p * 2,
         });
       }
-      // progress bar under heading
       if (barRef.current) barRef.current.style.transform = `scaleX(${0.06 + p * 0.94})`;
 
-      // text reveals (accumulate, smooth)
       const h = win(p, 0.02, 0.13);
       setEl(headingRef.current, h, (1 - h) * 28);
       const tg = win(p, 0.08, 0.2);
       setEl(taglineRef.current, tg, (1 - tg) * 24);
 
-      const windows = [
+      [
         [0.2, 0.4],
         [0.43, 0.63],
         [0.66, 0.86],
-      ];
-      windows.forEach((w, i) => {
+      ].forEach((w, i) => {
         const t = win(p, w[0], w[1]);
         setEl(paraRefs.current[i], t, (1 - t) * 26);
       });
 
-      // scroll hint fades early
       if (hintRef.current) gsap.set(hintRef.current, { opacity: 1 - win(p, 0, 0.1) });
     };
 
@@ -76,8 +89,8 @@ export default function AIJourney() {
       setEl(headingRef.current, 1, 0);
       setEl(taglineRef.current, 1, 0);
       paraRefs.current.forEach((el) => setEl(el, 1, 0));
-      if (robotRef.current) gsap.set(robotRef.current, { opacity: 1, x: 0, y: 0, scale: 1 });
       if (hintRef.current) gsap.set(hintRef.current, { opacity: 0 });
+      if (videoWrapRef.current) gsap.set(videoWrapRef.current, { scale: 1.06 });
       return;
     }
 
@@ -106,34 +119,65 @@ export default function AIJourney() {
         data-testid="ai-journey-pin"
         className="relative h-screen w-full overflow-hidden flex items-center"
       >
-        {/* robot — background already comes from the site Layout */}
+        {/* === blended robot video background (no box, feathered into the page) === */}
         <div
-          ref={robotRef}
-          data-testid="ai-journey-robot"
-          className="absolute z-0 right-[-6%] sm:right-[-3%] lg:right-[2%] bottom-0 h-[62%] sm:h-[78%] lg:h-[92%] pointer-events-none select-none"
-          style={{ willChange: 'transform, opacity' }}
+          ref={videoWrapRef}
+          className="absolute inset-0 z-0 pointer-events-none"
+          style={{ willChange: 'transform' }}
         >
-          {/* glow halo behind robot */}
-          <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse"
+          <video
+            ref={videoRef}
+            data-testid="ai-journey-video"
+            className="absolute inset-0 w-full h-full object-cover"
             style={{
-              width: '120%',
-              height: '120%',
-              background:
-                'radial-gradient(circle at 50% 45%, rgba(34,211,238,0.28) 0%, rgba(37,99,235,0.12) 38%, transparent 68%)',
-              filter: 'blur(14px)',
+              objectPosition: '72% center',
+              filter: 'brightness(0.62) contrast(1.06) saturate(1.18)',
+              opacity: 0.92,
+              maskImage: EDGE_MASK,
+              WebkitMaskImage: EDGE_MASK,
             }}
-          />
-          <img
-            src={ROBOT}
-            alt="Conquer Computers AI"
-            className="h-full w-auto object-contain animate-float"
-            style={{ filter: 'drop-shadow(0 18px 40px rgba(0,0,0,0.55))' }}
-            draggable={false}
+            poster="/about-anim/robot-poster.jpg"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+          >
+            <source src="/about-anim/robot-bg.webm" type="video/webm" />
+            <source src="/about-anim/robot-bg.mp4" type="video/mp4" />
+          </video>
+          {/* navy tint pushes the light video into the site's dark palette */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: '#0a1628',
+              mixBlendMode: 'multiply',
+              opacity: 0.55,
+              maskImage: EDGE_MASK,
+              WebkitMaskImage: EDGE_MASK,
+            }}
           />
         </div>
 
-        {/* text */}
+        {/* legibility gradient on the left (transparent over the robot on the right) */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to right, rgba(3,9,22,0.92) 0%, rgba(3,9,22,0.62) 34%, rgba(3,9,22,0.18) 58%, transparent 78%)',
+          }}
+        />
+        {/* top & bottom seam fade so it connects to the rest of the page */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(6,14,28,0.85) 0%, transparent 16%, transparent 82%, rgba(6,14,28,0.9) 100%)',
+          }}
+        />
+
+        {/* === content === */}
         <div className="relative z-10 w-full max-w-7xl mx-auto px-5 sm:px-8 md:px-10 lg:px-14 xl:px-20">
           <div className="max-w-[min(100%,640px)]">
             <div ref={headingRef} style={{ opacity: 0 }}>
@@ -143,7 +187,7 @@ export default function AIJourney() {
               <h2
                 data-testid="ai-journey-heading"
                 className="text-[clamp(2rem,7vw,3.75rem)] font-extrabold uppercase leading-[1.02] tracking-tight text-white"
-                style={{ fontFamily: '"Space Grotesk", sans-serif', textShadow: '0 2px 30px rgba(0,0,0,0.4)' }}
+                style={{ fontFamily: '"Space Grotesk", sans-serif', textShadow: '0 2px 30px rgba(0,0,0,0.6)' }}
               >
                 Conquer<br className="hidden sm:block" /> Computers
               </h2>
@@ -169,8 +213,8 @@ export default function AIJourney() {
                     paraRefs.current[i] = el;
                   }}
                   data-testid={`ai-journey-para-${i}`}
-                  style={{ opacity: 0 }}
-                  className="text-sm sm:text-base md:text-[1.05rem] leading-relaxed text-foreground-100/80 max-w-xl"
+                  style={{ opacity: 0, textShadow: '0 1px 12px rgba(0,0,0,0.55)' }}
+                  className="text-sm sm:text-base md:text-[1.05rem] leading-relaxed text-foreground-100/85 max-w-xl"
                 >
                   {para}
                 </p>
