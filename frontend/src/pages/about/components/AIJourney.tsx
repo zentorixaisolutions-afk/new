@@ -1,13 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useReducedMotion } from '@/hooks/useScrollPosition';
 
 gsap.registerPlugin(ScrollTrigger);
 
-// feather mask so the video dissolves into the page (no hard edges / no box)
-const EDGE_MASK =
-  'radial-gradient(125% 125% at 68% 45%, #000 38%, rgba(0,0,0,0.65) 62%, transparent 82%)';
+const FRAME_COUNT = 68;
+const FRAME_BASE = '/about-anim/frames/f_';
+const frameSrc = (n: number) => `${FRAME_BASE}${String(n).padStart(3, '0')}.jpg`;
+
+// feather only the outer edge so the frame fully covers the section yet dissolves into the page
+const EDGE_MASK = 'radial-gradient(135% 130% at 50% 48%, #000 72%, transparent 100%)';
 
 const PARAGRAPHS = [
   'Conquer Computers LLC is a trusted IT solutions company based in Deira, Dubai, serving businesses across the UAE since 1997. With over 27 years of experience, we deliver reliable technology services including IT support, managed services, CCTV systems, networking, cloud solutions, cybersecurity, business automation, and digital solutions.',
@@ -22,31 +25,74 @@ function win(p: number, a: number, b: number) {
 export default function AIJourney() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
-  const videoWrapRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const headingRef = useRef<HTMLDivElement>(null);
   const taglineRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLSpanElement>(null);
   const paraRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const hintRef = useRef<HTMLDivElement>(null);
+
+  const imgs = useRef<HTMLImageElement[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const prefersReduced = useReducedMotion();
 
-  // keep the ambient video playing only while the section is on screen
-  useEffect(() => {
-    const v = videoRef.current;
-    const pin = pinRef.current;
-    if (!v || !pin) return;
-    v.play().catch(() => {});
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) v.play().catch(() => {});
-        else v.pause();
-      },
-      { threshold: 0.01 }
-    );
-    io.observe(pin);
-    return () => io.disconnect();
+  const drawFrame = useCallback((idx: number) => {
+    const canvas = canvasRef.current;
+    const img = imgs.current[idx];
+    if (!canvas || !img || !img.complete || img.naturalWidth === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const ir = img.naturalWidth / img.naturalHeight;
+    const cr = cw / ch;
+    let dw: number, dh: number;
+    if (ir > cr) {
+      dh = ch;
+      dw = ch * ir;
+    } else {
+      dw = cw;
+      dh = cw / ir;
+    }
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
   }, []);
+
+  const sizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+  }, []);
+
+  // preload frame sequence
+  useEffect(() => {
+    let cancelled = false;
+    imgs.current = Array.from({ length: FRAME_COUNT }, (_, i) => {
+      const img = new Image();
+      img.src = frameSrc(i + 1);
+      return img;
+    });
+    const ready = () => {
+      if (cancelled) return;
+      setLoaded(true);
+      sizeCanvas();
+      drawFrame(0);
+    };
+    const first = imgs.current[0];
+    if (first.complete && first.naturalWidth > 0) ready();
+    else {
+      first.onload = ready;
+      first.onerror = ready;
+    }
+    const fallback = setTimeout(ready, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(fallback);
+    };
+  }, [drawFrame, sizeCanvas]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -58,39 +104,33 @@ export default function AIJourney() {
     };
 
     const render = (p: number) => {
-      // video: subtle scroll-driven parallax + scale so it feels alive while scrolling
-      if (videoWrapRef.current) {
-        gsap.set(videoWrapRef.current, {
-          scale: 1.06 + p * 0.06,
-          yPercent: -p * 6,
-          xPercent: p * 2,
-        });
-      }
+      // scrub the scene frames with scroll (working -> transition -> handshake)
+      const idx = Math.min(FRAME_COUNT - 1, Math.round(p * (FRAME_COUNT - 1)));
+      drawFrame(idx);
+
       if (barRef.current) barRef.current.style.transform = `scaleX(${0.06 + p * 0.94})`;
 
       const h = win(p, 0.02, 0.13);
       setEl(headingRef.current, h, (1 - h) * 28);
       const tg = win(p, 0.08, 0.2);
       setEl(taglineRef.current, tg, (1 - tg) * 24);
-
       [
-        [0.2, 0.4],
-        [0.43, 0.63],
-        [0.66, 0.86],
+        [0.18, 0.36],
+        [0.4, 0.58],
+        [0.62, 0.8],
       ].forEach((w, i) => {
         const t = win(p, w[0], w[1]);
         setEl(paraRefs.current[i], t, (1 - t) * 26);
       });
-
       if (hintRef.current) gsap.set(hintRef.current, { opacity: 1 - win(p, 0, 0.1) });
     };
 
     if (prefersReduced) {
+      drawFrame(0);
       setEl(headingRef.current, 1, 0);
       setEl(taglineRef.current, 1, 0);
       paraRefs.current.forEach((el) => setEl(el, 1, 0));
       if (hintRef.current) gsap.set(hintRef.current, { opacity: 0 });
-      if (videoWrapRef.current) gsap.set(videoWrapRef.current, { scale: 1.06 });
       return;
     }
 
@@ -98,19 +138,30 @@ export default function AIJourney() {
       ScrollTrigger.create({
         trigger: section,
         start: 'top top',
-        end: '+=2200',
+        end: '+=2600',
         pin: pin,
         scrub: 1,
         anticipatePin: 1,
         invalidateOnRefresh: true,
         onUpdate: (self) => render(self.progress),
-        onRefresh: () => render(0),
+        onRefresh: () => {
+          sizeCanvas();
+          render(0);
+        },
       });
       render(0);
     }, section);
 
-    return () => ctx.revert();
-  }, [prefersReduced]);
+    const onResize = () => {
+      sizeCanvas();
+      ScrollTrigger.refresh();
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      ctx.revert();
+    };
+  }, [loaded, prefersReduced, drawFrame, sizeCanvas]);
 
   return (
     <div ref={sectionRef} data-testid="ai-journey-section" className="relative">
@@ -119,53 +170,35 @@ export default function AIJourney() {
         data-testid="ai-journey-pin"
         className="relative h-screen w-full overflow-hidden flex items-center"
       >
-        {/* === blended robot video background (no box, feathered into the page) === */}
+        {/* === full-cover scene frames, blended into the page background === */}
+        <canvas
+          ref={canvasRef}
+          data-testid="ai-journey-canvas"
+          className="absolute inset-0 z-0 w-full h-full"
+          style={{
+            filter: 'brightness(0.6) contrast(1.06) saturate(1.18)',
+            opacity: 0.95,
+            maskImage: EDGE_MASK,
+            WebkitMaskImage: EDGE_MASK,
+          }}
+        />
+        {/* navy tint pushes the light video into the site's dark palette */}
         <div
-          ref={videoWrapRef}
-          className="absolute inset-0 z-0 pointer-events-none"
-          style={{ willChange: 'transform' }}
-        >
-          <video
-            ref={videoRef}
-            data-testid="ai-journey-video"
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{
-              objectPosition: '72% center',
-              filter: 'brightness(0.62) contrast(1.06) saturate(1.18)',
-              opacity: 0.92,
-              maskImage: EDGE_MASK,
-              WebkitMaskImage: EDGE_MASK,
-            }}
-            poster="/about-anim/robot-poster.jpg"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            disablePictureInPicture
-          >
-            <source src="/about-anim/robot-bg.webm" type="video/webm" />
-            <source src="/about-anim/robot-bg.mp4" type="video/mp4" />
-          </video>
-          {/* navy tint pushes the light video into the site's dark palette */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: '#0a1628',
-              mixBlendMode: 'multiply',
-              opacity: 0.55,
-              maskImage: EDGE_MASK,
-              WebkitMaskImage: EDGE_MASK,
-            }}
-          />
-        </div>
-
-        {/* legibility gradient on the left (transparent over the robot on the right) */}
+          className="absolute inset-0 z-0"
+          style={{
+            background: '#0a1628',
+            mixBlendMode: 'multiply',
+            opacity: 0.5,
+            maskImage: EDGE_MASK,
+            WebkitMaskImage: EDGE_MASK,
+          }}
+        />
+        {/* legibility gradient on the left */}
         <div
           className="absolute inset-0 z-[1] pointer-events-none"
           style={{
             background:
-              'linear-gradient(to right, rgba(3,9,22,0.92) 0%, rgba(3,9,22,0.62) 34%, rgba(3,9,22,0.18) 58%, transparent 78%)',
+              'linear-gradient(to right, rgba(3,9,22,0.94) 0%, rgba(3,9,22,0.66) 32%, rgba(3,9,22,0.2) 56%, transparent 78%)',
           }}
         />
         {/* top & bottom seam fade so it connects to the rest of the page */}
@@ -173,7 +206,7 @@ export default function AIJourney() {
           className="absolute inset-0 z-[1] pointer-events-none"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(6,14,28,0.85) 0%, transparent 16%, transparent 82%, rgba(6,14,28,0.9) 100%)',
+              'linear-gradient(to bottom, rgba(6,14,28,0.92) 0%, transparent 15%, transparent 80%, rgba(6,14,28,0.95) 100%)',
           }}
         />
 
@@ -213,7 +246,7 @@ export default function AIJourney() {
                     paraRefs.current[i] = el;
                   }}
                   data-testid={`ai-journey-para-${i}`}
-                  style={{ opacity: 0, textShadow: '0 1px 12px rgba(0,0,0,0.55)' }}
+                  style={{ opacity: 0, textShadow: '0 1px 12px rgba(0,0,0,0.6)' }}
                   className="text-sm sm:text-base md:text-[1.05rem] leading-relaxed text-foreground-100/85 max-w-xl"
                 >
                   {para}
@@ -232,6 +265,12 @@ export default function AIJourney() {
             </div>
           </div>
         </div>
+
+        {!loaded && (
+          <div className="absolute inset-0 z-[2] flex items-center justify-center">
+            <div className="h-10 w-10 rounded-full border-2 border-primary-400/40 border-t-primary-300 animate-spin" />
+          </div>
+        )}
       </div>
     </div>
   );
